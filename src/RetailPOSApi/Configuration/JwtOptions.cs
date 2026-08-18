@@ -9,6 +9,7 @@ public sealed class JwtOptions
     [Required] public string Audience { get; init; } = "";
     [Required, MinLength(32)] public string SigningKey { get; init; } = "";
     [Range(1, 1440)] public int AccessTokenExpirationMinutes { get; init; } = 15;
+    [Range(1, 90)] public int RefreshTokenExpirationDays { get; init; } = 7;
 }
 
 public sealed class BootstrapAdminOptions
