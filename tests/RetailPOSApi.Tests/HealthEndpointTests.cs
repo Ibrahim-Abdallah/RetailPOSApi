@@ -2,18 +2,19 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace RetailPOSApi.Tests;
 
-public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HealthEndpointTests : IClassFixture<RetailApiFactory>
 {
     private readonly HttpClient _client;
 
-    public HealthEndpointTests(WebApplicationFactory<Program> factory) => _client = factory.CreateClient();
+    public HealthEndpointTests(RetailApiFactory factory) => _client = factory.CreateClient();
 
     [Fact]
     public async Task Health_returns_success()
     {
         using var response = await _client.GetAsync("/health");
 
-        response.EnsureSuccessStatusCode();
-        Assert.Contains("Healthy", await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, body);
+        Assert.Contains("Healthy", body);
     }
 }
