@@ -30,6 +30,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         // native datetimeoffset mapping and therefore the production model unchanged.
         if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
         {
+            modelBuilder.Entity<Sale>().Property(x => x.RowVersion)
+                .IsConcurrencyToken()
+                .ValueGeneratedNever();
             var converter = new ValueConverter<DateTimeOffset, long>(
                 value => value.UtcTicks,
                 value => new DateTimeOffset(value, TimeSpan.Zero));
@@ -40,5 +43,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
                 property.SetValueConverter(converter);
             }
         }
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        PrepareSqliteRowVersions();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        PrepareSqliteRowVersions();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void PrepareSqliteRowVersions()
+    {
+        if (Database.ProviderName != "Microsoft.EntityFrameworkCore.Sqlite") return;
+        foreach (var entry in ChangeTracker.Entries<Sale>().Where(x => x.State is EntityState.Added or EntityState.Modified))
+            entry.Entity.RowVersion = Guid.NewGuid().ToByteArray();
     }
 }

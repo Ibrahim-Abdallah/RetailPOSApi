@@ -37,9 +37,10 @@ public sealed class RetailApiFactory : WebApplicationFactory<Program>, IAsyncLif
             services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
             services.RemoveAll<AppDbContext>();
             services.AddSingleton<CashierShiftSaveCoordinator>();
+            services.AddSingleton<SaleMutationSaveCoordinator>();
             services.AddDbContext<AppDbContext>((provider, options) => options
                 .UseSqlite(ConnectionString)
-                .AddInterceptors(provider.GetRequiredService<CashierShiftSaveCoordinator>()));
+                .AddInterceptors(provider.GetRequiredService<CashierShiftSaveCoordinator>(), provider.GetRequiredService<SaleMutationSaveCoordinator>()));
         });
     }
 
@@ -49,6 +50,7 @@ public sealed class RetailApiFactory : WebApplicationFactory<Program>, IAsyncLif
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();
+        await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
         await SeedAsync(scope.ServiceProvider, db, UserRole.Admin, "admin@example.com");
         await SeedAsync(scope.ServiceProvider, db, UserRole.Manager, "manager@example.com");
         await SeedAsync(scope.ServiceProvider, db, UserRole.Cashier, "cashier@example.com");
