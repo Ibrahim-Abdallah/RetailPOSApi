@@ -60,6 +60,7 @@ builder.Services.AddSingleton<IRefreshAttemptCoordinator, RefreshAttemptCoordina
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
+builder.Services.AddScoped<ICashierShiftService, CashierShiftService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<AdminBootstrapService>();
 builder.Services.AddOptions<JwtOptions>()
