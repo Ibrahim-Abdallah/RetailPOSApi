@@ -36,7 +36,10 @@ public sealed class RetailApiFactory : WebApplicationFactory<Program>, IAsyncLif
             services.RemoveAll<DbContextOptions<AppDbContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
             services.RemoveAll<AppDbContext>();
-            services.AddDbContext<AppDbContext>(options => options.UseSqlite(ConnectionString));
+            services.AddSingleton<CashierShiftSaveCoordinator>();
+            services.AddDbContext<AppDbContext>((provider, options) => options
+                .UseSqlite(ConnectionString)
+                .AddInterceptors(provider.GetRequiredService<CashierShiftSaveCoordinator>()));
         });
     }
 

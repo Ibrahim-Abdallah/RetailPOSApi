@@ -3,8 +3,49 @@ using RetailPOSApi.DTOs.Auth;
 using RetailPOSApi.DTOs.Employees;
 using RetailPOSApi.DTOs.Configuration;
 using RetailPOSApi.Domain;
+using RetailPOSApi.DTOs.Shifts;
 
 namespace RetailPOSApi.Validation;
+
+public sealed class OpenShiftRequestValidator : AbstractValidator<OpenShiftRequest>
+{
+    public OpenShiftRequestValidator()
+    {
+        RuleFor(x => x.RegisterId).GreaterThan(0);
+        RuleFor(x => x.OpeningFloat).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.OpeningFloat)
+            .Must(value => Math.Round(value, 2, MidpointRounding.AwayFromZero) <= 9_999_999_999_999_999.99m)
+            .When(x => x.OpeningFloat >= 0)
+            .WithMessage("Opening float exceeds the supported precision.");
+    }
+}
+
+public class ShiftQueryValidator : AbstractValidator<ShiftQuery>
+{
+    public ShiftQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+        RuleFor(x => x.Status).IsInEnum().When(x => x.Status.HasValue);
+        RuleFor(x => x.SortBy).NotEmpty().Must(value => value is not null && new[] { "openedAt", "createdAt" }.Contains(value, StringComparer.OrdinalIgnoreCase));
+        RuleFor(x => x.SortDirection).NotEmpty().Must(value => value is not null && (value.Equals("asc", StringComparison.OrdinalIgnoreCase) || value.Equals("desc", StringComparison.OrdinalIgnoreCase)));
+    }
+}
+
+public sealed class ManagementShiftQueryValidator : AbstractValidator<ManagementShiftQuery>
+{
+    public ManagementShiftQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+        RuleFor(x => x.Status).IsInEnum().When(x => x.Status.HasValue);
+        RuleFor(x => x.SortBy).NotEmpty().Must(value => value is not null && new[] { "openedAt", "createdAt", "openingFloat" }.Contains(value, StringComparer.OrdinalIgnoreCase));
+        RuleFor(x => x.SortDirection).NotEmpty().Must(value => value is not null && (value.Equals("asc", StringComparison.OrdinalIgnoreCase) || value.Equals("desc", StringComparison.OrdinalIgnoreCase)));
+        RuleFor(x => x.BranchId).GreaterThan(0).When(x => x.BranchId.HasValue);
+        RuleFor(x => x.RegisterId).GreaterThan(0).When(x => x.RegisterId.HasValue);
+        RuleFor(x => x.CashierUserId).GreaterThan(0).When(x => x.CashierUserId.HasValue);
+    }
+}
 
 public sealed class LoginRequestValidator : AbstractValidator<LoginRequest>
 {
