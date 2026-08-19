@@ -4,8 +4,49 @@ using RetailPOSApi.DTOs.Employees;
 using RetailPOSApi.DTOs.Configuration;
 using RetailPOSApi.Domain;
 using RetailPOSApi.DTOs.Shifts;
+using RetailPOSApi.DTOs.Sales;
 
 namespace RetailPOSApi.Validation;
+
+public sealed class AddSaleLineRequestValidator : AbstractValidator<AddSaleLineRequest>
+{
+    public AddSaleLineRequestValidator()
+    {
+        RuleFor(x => x.ProductId).GreaterThan(0);
+        RuleFor(x => x.Quantity).GreaterThan(0);
+        RuleFor(x => x.DiscountId).GreaterThan(0).When(x => x.DiscountId.HasValue);
+    }
+}
+public sealed class UpdateSaleLineQuantityRequestValidator : AbstractValidator<UpdateSaleLineQuantityRequest>
+{
+    public UpdateSaleLineQuantityRequestValidator() => RuleFor(x => x.Quantity).GreaterThan(0);
+}
+public sealed class ApplySaleLineDiscountRequestValidator : AbstractValidator<ApplySaleLineDiscountRequest>
+{
+    public ApplySaleLineDiscountRequestValidator() => RuleFor(x => x.DiscountId).GreaterThan(0);
+}
+public class SaleQueryValidator : AbstractValidator<SaleQuery>
+{
+    public SaleQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+        RuleFor(x => x.Status).IsInEnum().When(x => x.Status.HasValue);
+        RuleFor(x => x.CashierShiftId).GreaterThan(0).When(x => x.CashierShiftId.HasValue);
+        RuleFor(x => x.SortBy).NotEmpty().Must(x => x is not null && new[] { "createdAt", "totalAmount" }.Contains(x, StringComparer.OrdinalIgnoreCase));
+        RuleFor(x => x.SortDirection).NotEmpty().Must(x => x is not null && (x.Equals("asc", StringComparison.OrdinalIgnoreCase) || x.Equals("desc", StringComparison.OrdinalIgnoreCase)));
+    }
+}
+public sealed class ManagementSaleQueryValidator : AbstractValidator<ManagementSaleQuery>
+{
+    public ManagementSaleQueryValidator()
+    {
+        Include(new SaleQueryValidator());
+        RuleFor(x => x.BranchId).GreaterThan(0).When(x => x.BranchId.HasValue);
+        RuleFor(x => x.RegisterId).GreaterThan(0).When(x => x.RegisterId.HasValue);
+        RuleFor(x => x.CashierUserId).GreaterThan(0).When(x => x.CashierUserId.HasValue);
+    }
+}
 
 public sealed class OpenShiftRequestValidator : AbstractValidator<OpenShiftRequest>
 {
