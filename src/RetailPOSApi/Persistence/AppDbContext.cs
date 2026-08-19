@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RetailPOSApi.Domain;
 
 namespace RetailPOSApi.Persistence;
@@ -20,6 +21,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<RefundLine> RefundLines => Set<RefundLine>();
     public DbSet<RefundPayment> RefundPayments => Set<RefundPayment>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        // SQLite cannot order DateTimeOffset values natively. The relational test
+        // provider uses a sortable binary representation; SQL Server keeps its
+        // native datetimeoffset mapping and therefore the production model unchanged.
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            var converter = new ValueConverter<DateTimeOffset, long>(
+                value => value.UtcTicks,
+                value => new DateTimeOffset(value, TimeSpan.Zero));
+            foreach (var property in modelBuilder.Model.GetEntityTypes()
+                         .SelectMany(entity => entity.GetProperties())
+                         .Where(property => property.ClrType == typeof(DateTimeOffset)))
+            {
+                property.SetValueConverter(converter);
+            }
+        }
+    }
 }
