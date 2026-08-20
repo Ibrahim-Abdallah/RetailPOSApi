@@ -26,6 +26,8 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
     public void Configure(EntityTypeBuilder<Sale> b)
     {
         b.Property(x => x.ReceiptNumber).HasMaxLength(100);
+        b.Property(x => x.CompletionIdempotencyKey).HasMaxLength(100);
+        b.Property(x => x.CompletionRequestHash).HasMaxLength(64);
         b.Property(x => x.VoidReason).HasMaxLength(500);
         foreach (var name in new[] { nameof(Sale.Subtotal), nameof(Sale.DiscountTotal), nameof(Sale.TaxTotal), nameof(Sale.TotalAmount) })
             b.Property(name).HasColumnType(ConfigurationHelpers.Money);

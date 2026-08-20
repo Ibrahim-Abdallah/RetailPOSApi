@@ -202,21 +202,11 @@ public sealed class SaleService(AppDbContext db, ICurrentUserService currentUser
             ("createdat", "asc") => source.OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id),
             _ => source.OrderByDescending(x => x.CreatedAtUtc).ThenBy(x => x.Id)
         };
-        var values = await Project(source.Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)).ToListAsync(ct);
+        var values = await SaleProjection.Project(source.Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)).ToListAsync(ct);
         return new(values, query.Page, query.PageSize, total, (int)Math.Ceiling(total / (double)query.PageSize));
     }
 
-    static Task<SaleResponse?> Detail(IQueryable<Sale> source, CancellationToken ct) => Project(source).SingleOrDefaultAsync(ct);
-
-    static IQueryable<SaleResponse> Project(IQueryable<Sale> source) => source.Select(x => new SaleResponse(
-        x.Id, x.Status, x.BranchId, x.Branch.Code, x.Branch.Name, x.RegisterId, x.Register.Code, x.Register.Name,
-        x.CashierShiftId, x.CashierUserId, x.CashierUser.FirstName + " " + x.CashierUser.LastName,
-        x.Subtotal, x.DiscountTotal, x.TaxTotal, x.TotalAmount, x.CreatedAtUtc, x.UpdatedAtUtc,
-        x.Lines.OrderBy(l => l.Id).Select(l => new SaleLineResponse(
-            l.Id, l.ProductId, l.ProductSku, l.ProductName, l.Quantity, l.UnitPrice,
-            l.DiscountId, l.DiscountName, l.DiscountType, l.DiscountValue, l.UnitDiscountAmount, l.UnitNetAmount,
-            l.TaxRateId, l.TaxRateName, l.TaxRatePercentage, l.UnitTaxAmount, l.UnitTotal,
-            l.LineSubtotal, l.LineDiscountTotal, l.LineTaxTotal, l.LineTotal)).ToList()));
+    static Task<SaleResponse?> Detail(IQueryable<Sale> source, CancellationToken ct) => SaleProjection.Project(source).SingleOrDefaultAsync(ct);
 
     async Task<(SaleOperationStatus Status, int UserId, string? Message)> CurrentCashier(CancellationToken ct)
     {
@@ -243,4 +233,21 @@ public sealed class SaleService(AppDbContext db, ICurrentUserService currentUser
         db.ChangeTracker.Clear();
         return result;
     }
+}
+
+public static class SaleProjection
+{
+    public static IQueryable<SaleResponse> Project(IQueryable<Sale> source) => source.Select(x => new SaleResponse(
+        x.Id, x.Status, x.BranchId, x.Branch.Code, x.Branch.Name, x.RegisterId, x.Register.Code, x.Register.Name,
+        x.CashierShiftId, x.CashierUserId, x.CashierUser.FirstName + " " + x.CashierUser.LastName,
+        x.Subtotal, x.DiscountTotal, x.TaxTotal, x.TotalAmount, x.ReceiptNumber, x.CompletedAtUtc,
+        x.CreatedAtUtc, x.UpdatedAtUtc,
+        x.Lines.OrderBy(l => l.Id).Select(l => new SaleLineResponse(
+            l.Id, l.ProductId, l.ProductSku, l.ProductName, l.Quantity, l.UnitPrice,
+            l.DiscountId, l.DiscountName, l.DiscountType, l.DiscountValue, l.UnitDiscountAmount, l.UnitNetAmount,
+            l.TaxRateId, l.TaxRateName, l.TaxRatePercentage, l.UnitTaxAmount, l.UnitTotal,
+            l.LineSubtotal, l.LineDiscountTotal, l.LineTaxTotal, l.LineTotal)).ToList(),
+        x.Payments.OrderBy(p => p.Id).Select(p => new PaymentResponse(
+            p.Id, p.Method, p.AmountApplied, p.TenderedAmount, p.ChangeAmount,
+            p.ExternalReference, p.Status, p.CreatedAtUtc)).ToList()));
 }
