@@ -241,6 +241,8 @@ public static class SaleProjection
         x.Id, x.Status, x.BranchId, x.Branch.Code, x.Branch.Name, x.RegisterId, x.Register.Code, x.Register.Name,
         x.CashierShiftId, x.CashierUserId, x.CashierUser.FirstName + " " + x.CashierUser.LastName,
         x.Subtotal, x.DiscountTotal, x.TaxTotal, x.TotalAmount, x.ReceiptNumber, x.CompletedAtUtc,
+        x.VoidedAtUtc, x.VoidedByUserId,
+        x.VoidedByUser == null ? null : x.VoidedByUser.FirstName + " " + x.VoidedByUser.LastName, x.VoidReason,
         x.CreatedAtUtc, x.UpdatedAtUtc,
         x.Lines.OrderBy(l => l.Id).Select(l => new SaleLineResponse(
             l.Id, l.ProductId, l.ProductSku, l.ProductName, l.Quantity, l.UnitPrice,

@@ -56,6 +56,42 @@ public sealed class CompleteSalePaymentRequestValidator : AbstractValidator<Comp
 
     static bool MoneyValue(decimal value) => value <= SaleCalculation.MaximumMoney && (decimal.GetBits(value)[3] >> 16 & 0x7F) <= 2;
 }
+public sealed class VoidSaleRequestValidator : AbstractValidator<VoidSaleRequest>
+{
+    public VoidSaleRequestValidator() => RuleFor(x => x.Reason).Must(x => !string.IsNullOrWhiteSpace(x) && x.Trim().Length <= 500)
+        .WithMessage("Reason is required and must not exceed 500 characters.");
+}
+public sealed class ProcessRefundRequestValidator : AbstractValidator<ProcessRefundRequest>
+{
+    public ProcessRefundRequestValidator()
+    {
+        RuleFor(x => x.Reason).Must(x => !string.IsNullOrWhiteSpace(x) && x.Trim().Length <= 500)
+            .WithMessage("Reason is required and must not exceed 500 characters.");
+        RuleFor(x => x.Lines).NotNull().NotEmpty();
+        RuleForEach(x => x.Lines).SetValidator(new ProcessRefundLineRequestValidator());
+        RuleFor(x => x.Lines).Must(x => x is null || x.Select(y => y.SaleLineId).Distinct().Count() == x.Count)
+            .WithMessage("Duplicate sale line ids are not allowed.");
+        RuleFor(x => x.Payments).NotNull();
+        RuleForEach(x => x.Payments).SetValidator(new ProcessRefundPaymentRequestValidator());
+        RuleFor(x => x.Payments).Must(x => x is null || x.Select(y => y.OriginalPaymentId).Distinct().Count() == x.Count)
+            .WithMessage("Duplicate original payment ids are not allowed.");
+    }
+}
+public sealed class ProcessRefundLineRequestValidator : AbstractValidator<ProcessRefundLineRequest>
+{
+    public ProcessRefundLineRequestValidator() { RuleFor(x => x.SaleLineId).GreaterThan(0); RuleFor(x => x.Quantity).GreaterThan(0); }
+}
+public sealed class ProcessRefundPaymentRequestValidator : AbstractValidator<ProcessRefundPaymentRequest>
+{
+    public ProcessRefundPaymentRequestValidator()
+    {
+        RuleFor(x => x.OriginalPaymentId).GreaterThan(0);
+        RuleFor(x => x.Amount).GreaterThan(0).Must(x => x <= SaleCalculation.MaximumMoney && (decimal.GetBits(x)[3] >> 16 & 0x7F) <= 2)
+            .WithMessage("Amount must fit decimal(18,2) without rounding.");
+        RuleFor(x => x.ExternalReference).Must(x => x is null || x.Trim().Length <= 200)
+            .WithMessage("External reference must not exceed 200 characters.");
+    }
+}
 public class SaleQueryValidator : AbstractValidator<SaleQuery>
 {
     public SaleQueryValidator()
