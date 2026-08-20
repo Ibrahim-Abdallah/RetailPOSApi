@@ -101,7 +101,7 @@ public sealed class CashierSalesController(ISaleService service, ISaleCompletion
 [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Manager)}")]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
-public sealed class ManagementSalesController(ISaleService service, IValidator<ManagementSaleQuery> validator) : ControllerBase
+public sealed class ManagementSalesController(ISaleService service, ISaleLifecycleService lifecycle, IValidator<ManagementSaleQuery> validator) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<PagedResponse<SaleResponse>>(StatusCodes.Status200OK)]
@@ -122,4 +122,33 @@ public sealed class ManagementSalesController(ISaleService service, IValidator<M
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(int id, CancellationToken ct) =>
         await service.GetManagement(id, ct) is { } sale ? Ok(sale) : NotFound(new ProblemDetails { Status = 404, Title = "Sale not found." });
+
+    [HttpPost("{saleId:int}/void")]
+    [ProducesResponseType<SaleResponse>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Void(int saleId, VoidSaleRequest request, [FromServices] IValidator<VoidSaleRequest> requestValidator, CancellationToken ct)
+    {
+        var validation = await requestValidator.ValidateAsync(request, ct);
+        return validation.IsValid ? Result(await lifecycle.Void(saleId, request, ct)) : ValidationProblem(new ValidationProblemDetails(validation.ToDictionary()));
+    }
+
+    [HttpPost("{saleId:int}/refunds")]
+    [ProducesResponseType<RefundResponse>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Refund(int saleId, ProcessRefundRequest request, [FromServices] IValidator<ProcessRefundRequest> requestValidator, CancellationToken ct)
+    {
+        var validation = await requestValidator.ValidateAsync(request, ct);
+        return validation.IsValid ? Result(await lifecycle.Refund(saleId, request, ct)) : ValidationProblem(new ValidationProblemDetails(validation.ToDictionary()));
+    }
+
+    [HttpGet("{saleId:int}/refunds")]
+    [ProducesResponseType<IReadOnlyList<RefundResponse>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Refunds(int saleId, CancellationToken ct) => Result(await lifecycle.Refunds(saleId, ct));
+
+    IActionResult Result<T>(LifecycleResult<T> result) => result.Status switch
+    {
+        SaleOperationStatus.Success => Ok(result.Value),
+        SaleOperationStatus.NotFound => NotFound(new ProblemDetails { Status = 404, Title = result.Message }),
+        SaleOperationStatus.Conflict => Conflict(new ProblemDetails { Status = 409, Title = result.Message }),
+        SaleOperationStatus.BadRequest => BadRequest(new ProblemDetails { Status = 400, Title = result.Message }),
+        _ => StatusCode(403, new ProblemDetails { Status = 403, Title = result.Message })
+    };
 }
