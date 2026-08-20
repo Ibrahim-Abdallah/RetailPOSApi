@@ -108,6 +108,8 @@ public sealed class Sale
 {
     public int Id { get; set; }
     public string? ReceiptNumber { get; set; }
+    public string? CompletionIdempotencyKey { get; set; }
+    public string? CompletionRequestHash { get; set; }
     public int BranchId { get; set; }
     public int RegisterId { get; set; }
     public int CashierShiftId { get; set; }

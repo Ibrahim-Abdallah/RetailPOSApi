@@ -5,6 +5,7 @@ using RetailPOSApi.DTOs.Configuration;
 using RetailPOSApi.Domain;
 using RetailPOSApi.DTOs.Shifts;
 using RetailPOSApi.DTOs.Sales;
+using RetailPOSApi.Services;
 
 namespace RetailPOSApi.Validation;
 
@@ -24,6 +25,36 @@ public sealed class UpdateSaleLineQuantityRequestValidator : AbstractValidator<U
 public sealed class ApplySaleLineDiscountRequestValidator : AbstractValidator<ApplySaleLineDiscountRequest>
 {
     public ApplySaleLineDiscountRequestValidator() => RuleFor(x => x.DiscountId).GreaterThan(0);
+}
+public sealed class CompleteSaleRequestValidator : AbstractValidator<CompleteSaleRequest>
+{
+    public CompleteSaleRequestValidator()
+    {
+        RuleFor(x => x.IdempotencyKey)
+            .Must(x => !string.IsNullOrWhiteSpace(x) && x.Trim().Length <= 100)
+            .WithMessage("Idempotency key is required and must not exceed 100 characters.");
+        RuleFor(x => x.Payments).NotNull();
+        RuleForEach(x => x.Payments).SetValidator(new CompleteSalePaymentRequestValidator());
+    }
+}
+public sealed class CompleteSalePaymentRequestValidator : AbstractValidator<CompleteSalePaymentRequest>
+{
+    public CompleteSalePaymentRequestValidator()
+    {
+        RuleFor(x => x.Method).IsInEnum();
+        RuleFor(x => x.AmountApplied).GreaterThan(0).Must(MoneyValue)
+            .WithMessage("Amount applied must fit decimal(18,2) without rounding.");
+        RuleFor(x => x.TenderedAmount).GreaterThanOrEqualTo(0).Must(MoneyValue)
+            .WithMessage("Tendered amount must fit decimal(18,2) without rounding.");
+        RuleFor(x => x).Must(x => x.Method != PaymentMethod.Cash || x.TenderedAmount >= x.AmountApplied)
+            .WithMessage("Cash tendered amount must be at least the amount applied.");
+        RuleFor(x => x).Must(x => x.Method is not (PaymentMethod.Card or PaymentMethod.Other) || x.TenderedAmount == x.AmountApplied)
+            .WithMessage("Card and Other tendered amount must equal the amount applied.");
+        RuleFor(x => x.ExternalReference).Must(x => x is null || x.Trim().Length <= 200)
+            .WithMessage("External reference must not exceed 200 characters.");
+    }
+
+    static bool MoneyValue(decimal value) => value <= SaleCalculation.MaximumMoney && (decimal.GetBits(value)[3] >> 16 & 0x7F) <= 2;
 }
 public class SaleQueryValidator : AbstractValidator<SaleQuery>
 {

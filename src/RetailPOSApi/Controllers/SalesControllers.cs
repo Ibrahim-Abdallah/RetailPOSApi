@@ -16,12 +16,18 @@ namespace RetailPOSApi.Controllers;
 [ProducesResponseType(StatusCodes.Status400BadRequest)]
 [ProducesResponseType(StatusCodes.Status404NotFound)]
 [ProducesResponseType(StatusCodes.Status409Conflict)]
-public sealed class CashierSalesController(ISaleService service) : ControllerBase
+public sealed class CashierSalesController(ISaleService service, ISaleCompletionService completionService) : ControllerBase
 {
     [HttpPost]
     [ProducesResponseType<SaleResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(CancellationToken ct) => Result(await service.Create(ct), true);
+
+    [HttpPost("{saleId:int}/complete")]
+    [ProducesResponseType<SaleResponse>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Complete(int saleId, CompleteSaleRequest request,
+        [FromServices] IValidator<CompleteSaleRequest> validator, CancellationToken ct) =>
+        await ValidateAndRun(request, validator, () => completionService.Complete(saleId, request, ct), ct);
 
     [HttpGet]
     [ProducesResponseType<PagedResponse<SaleResponse>>(StatusCodes.Status200OK)]
