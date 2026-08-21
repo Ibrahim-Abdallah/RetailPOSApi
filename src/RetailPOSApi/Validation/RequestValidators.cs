@@ -128,6 +128,18 @@ public sealed class OpenShiftRequestValidator : AbstractValidator<OpenShiftReque
     }
 }
 
+public sealed class CloseShiftRequestValidator : AbstractValidator<CloseShiftRequest>
+{
+    public CloseShiftRequestValidator()
+    {
+        RuleFor(x => x.DeclaredCash).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.DeclaredCash)
+            .Must(value => Math.Round(value, 2, MidpointRounding.AwayFromZero) <= 9_999_999_999_999_999.99m)
+            .When(x => x.DeclaredCash >= 0)
+            .WithMessage("Declared cash exceeds the supported precision.");
+    }
+}
+
 public class ShiftQueryValidator : AbstractValidator<ShiftQuery>
 {
     public ShiftQueryValidator()

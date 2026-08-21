@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 namespace RetailPOSApi.DTOs.Shifts;
 
 public sealed record OpenShiftRequest(int RegisterId, [property: JsonRequired] decimal OpeningFloat);
+public sealed record CloseShiftRequest([property: JsonRequired] decimal DeclaredCash);
 
 public record ShiftQuery(
     int Page = 1,
@@ -36,5 +37,8 @@ public sealed record ShiftResponse(
     decimal OpeningFloat,
     DateTimeOffset OpenedAtUtc,
     DateTimeOffset? ClosedAtUtc,
+    decimal? DeclaredCash,
+    decimal? ExpectedCash,
+    decimal? CashVariance,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc);

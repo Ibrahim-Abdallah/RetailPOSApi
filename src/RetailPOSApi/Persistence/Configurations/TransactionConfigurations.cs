@@ -17,7 +17,12 @@ public sealed class CashierShiftConfiguration : IEntityTypeConfiguration<Cashier
         b.HasOne(x => x.Branch).WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.Register).WithMany().HasForeignKey(x => x.RegisterId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.CashierUser).WithMany().HasForeignKey(x => x.CashierUserId).OnDelete(DeleteBehavior.Restrict);
-        b.ToTable(t => t.HasCheckConstraint("CK_CashierShifts_OpeningFloat", "[OpeningFloat] >= 0"));
+        b.ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_CashierShifts_OpeningFloat", "[OpeningFloat] >= 0");
+            t.HasCheckConstraint("CK_CashierShifts_ClosingCash", "[DeclaredCash] IS NULL OR [DeclaredCash] >= 0");
+            t.HasCheckConstraint("CK_CashierShifts_ExpectedCash", "[ExpectedCash] IS NULL OR [ExpectedCash] >= 0");
+        });
     }
 }
 

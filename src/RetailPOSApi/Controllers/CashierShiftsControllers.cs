@@ -14,6 +14,7 @@ namespace RetailPOSApi.Controllers;
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
 public sealed class CashierShiftsController(ICashierShiftService service, IValidator<OpenShiftRequest> openValidator,
+    IValidator<CloseShiftRequest> closeValidator,
     IValidator<ShiftQuery> queryValidator) : ControllerBase
 {
     [HttpPost("open")]
@@ -29,6 +30,25 @@ public sealed class CashierShiftsController(ICashierShiftService service, IValid
         return result.Status switch
         {
             ShiftOperationStatus.Success => CreatedAtAction(nameof(Get), new { id = result.Value!.Id }, result.Value),
+            ShiftOperationStatus.NotFound => ProblemResult(404, result.Message!),
+            ShiftOperationStatus.Conflict => ProblemResult(409, result.Message!),
+            _ => ProblemResult(403, result.Message!)
+        };
+    }
+
+    [HttpPost("{id:int}/close")]
+    [ProducesResponseType<ShiftResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Close(int id, CloseShiftRequest request, CancellationToken ct)
+    {
+        var validation = await closeValidator.ValidateAsync(request, ct);
+        if (!validation.IsValid) return ValidationProblem(new ValidationProblemDetails(validation.ToDictionary()));
+        var result = await service.Close(id, request, ct);
+        return result.Status switch
+        {
+            ShiftOperationStatus.Success => Ok(result.Value),
             ShiftOperationStatus.NotFound => ProblemResult(404, result.Message!),
             ShiftOperationStatus.Conflict => ProblemResult(409, result.Message!),
             _ => ProblemResult(403, result.Message!)
