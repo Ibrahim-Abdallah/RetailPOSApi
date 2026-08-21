@@ -13,6 +13,7 @@ public sealed record ShiftOperationResult(ShiftOperationStatus Status, ShiftResp
 public interface ICashierShiftService
 {
     Task<ShiftOperationResult> Open(OpenShiftRequest request, CancellationToken ct);
+    Task<ShiftOperationResult> Close(int id, CloseShiftRequest request, CancellationToken ct);
     Task<ShiftResponse?> Current(CancellationToken ct);
     Task<PagedResponse<ShiftResponse>> ListOwn(ShiftQuery query, CancellationToken ct);
     Task<ShiftResponse?> GetOwn(int id, CancellationToken ct);
@@ -74,7 +75,81 @@ public sealed class CashierShiftService(AppDbContext db, ICurrentUserService cur
         return new(ShiftOperationStatus.Success, new ShiftResponse(shift.Id, register.BranchId, register.Branch.Code,
             register.Branch.Name, register.Id, register.Code, register.Name, cashier.Id,
             $"{cashier.FirstName} {cashier.LastName}", shift.Status, shift.OpeningFloat, shift.OpenedAtUtc,
-            shift.ClosedAtUtc, shift.CreatedAtUtc, shift.UpdatedAtUtc));
+            shift.ClosedAtUtc, shift.DeclaredCash, shift.ExpectedCash, shift.CashVariance,
+            shift.CreatedAtUtc, shift.UpdatedAtUtc));
+    }
+
+    public async Task<ShiftOperationResult> Close(int id, CloseShiftRequest request, CancellationToken ct)
+    {
+        if (currentUser.UserId is not int cashierId)
+            return new(ShiftOperationStatus.Forbidden, null, "Authenticated cashier identity is unavailable.");
+        if (!await db.Users.AsNoTracking().AnyAsync(x => x.Id == cashierId && x.IsActive && x.Role == UserRole.Cashier, ct))
+            return new(ShiftOperationStatus.Forbidden, null, "Cashier is not active.");
+
+        var owned = await db.CashierShifts.AsNoTracking()
+            .Where(x => x.Id == id && x.CashierUserId == cashierId)
+            .Select(x => new { x.Status, x.OpeningFloat })
+            .SingleOrDefaultAsync(ct);
+        if (owned is null) return new(ShiftOperationStatus.NotFound, null, "Cashier shift not found.");
+        if (owned.Status != CashierShiftStatus.Open)
+            return new(ShiftOperationStatus.Conflict, null, "Cashier shift is already closed.");
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            // This conditional transition is both the lifecycle claim and the row-level
+            // serialization point. It is rolled back if reconciliation cannot finish.
+            var claimed = await db.CashierShifts
+                .Where(x => x.Id == id && x.CashierUserId == cashierId && x.Status == CashierShiftStatus.Open)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Status, CashierShiftStatus.Closed), ct);
+            if (claimed != 1)
+            {
+                await transaction.RollbackAsync(ct);
+                return new(ShiftOperationStatus.Conflict, null, "Cashier shift is already closed.");
+            }
+
+            if (await db.Sales.AsNoTracking().AnyAsync(x => x.CashierShiftId == id && x.Status == SaleStatus.Open, ct))
+            {
+                await transaction.RollbackAsync(ct);
+                return new(ShiftOperationStatus.Conflict, null, "Cashier shift contains one or more open sales.");
+            }
+
+            var grossCashSales = await db.Payments.AsNoTracking()
+                .Where(x => x.Sale.CashierShiftId == id && x.Method == PaymentMethod.Cash &&
+                            x.Status == PaymentStatus.Completed && x.Sale.Status != SaleStatus.Open)
+                .SumAsync(x => (decimal?)x.AmountApplied, ct) ?? 0m;
+            var cashRefunds = await db.RefundPayments.AsNoTracking()
+                .Where(x => x.Refund.Sale.CashierShiftId == id && x.Refund.Status == RefundStatus.Completed &&
+                            x.Method == PaymentMethod.Cash)
+                .SumAsync(x => (decimal?)x.Amount, ct) ?? 0m;
+            var voidedCashSales = await db.Payments.AsNoTracking()
+                .Where(x => x.Sale.CashierShiftId == id && x.Sale.Status == SaleStatus.Voided &&
+                            x.Method == PaymentMethod.Cash && x.Status == PaymentStatus.Completed)
+                .SumAsync(x => (decimal?)x.AmountApplied, ct) ?? 0m;
+
+            var declaredCash = Money(request.DeclaredCash);
+            var expectedCash = Money(owned.OpeningFloat + grossCashSales - cashRefunds - voidedCashSales);
+            var variance = Money(declaredCash - expectedCash);
+            var now = clock.GetUtcNow();
+            await db.CashierShifts.Where(x => x.Id == id && x.Status == CashierShiftStatus.Closed)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(x => x.ClosedAtUtc, now)
+                    .SetProperty(x => x.DeclaredCash, declaredCash)
+                    .SetProperty(x => x.ExpectedCash, expectedCash)
+                    .SetProperty(x => x.CashVariance, variance)
+                    .SetProperty(x => x.UpdatedAtUtc, now), ct);
+            await transaction.CommitAsync(ct);
+            return new(ShiftOperationStatus.Success, await GetOwn(id, ct));
+        }
+        catch (DbException)
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            if (await db.CashierShifts.AsNoTracking().AnyAsync(
+                    x => x.Id == id && x.CashierUserId == cashierId && x.Status == CashierShiftStatus.Closed, ct))
+                return new(ShiftOperationStatus.Conflict, null, "Cashier shift is already closed.");
+            throw;
+        }
     }
 
     public Task<ShiftResponse?> Current(CancellationToken ct) => BaseQuery()
@@ -121,7 +196,10 @@ public sealed class CashierShiftService(AppDbContext db, ICurrentUserService cur
     static System.Linq.Expressions.Expression<Func<CashierShift, ShiftResponse>> Project() => x => new ShiftResponse(
         x.Id, x.BranchId, x.Branch.Code, x.Branch.Name, x.RegisterId, x.Register.Code, x.Register.Name,
         x.CashierUserId, x.CashierUser.FirstName + " " + x.CashierUser.LastName, x.Status, x.OpeningFloat,
-        x.OpenedAtUtc, x.ClosedAtUtc, x.CreatedAtUtc, x.UpdatedAtUtc);
+        x.OpenedAtUtc, x.ClosedAtUtc, x.DeclaredCash, x.ExpectedCash, x.CashVariance,
+        x.CreatedAtUtc, x.UpdatedAtUtc);
+
+    static decimal Money(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
     static bool IsUniqueViolation(DbUpdateException exception)
     {

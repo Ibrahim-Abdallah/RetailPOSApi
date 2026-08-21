@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using RetailPOSApi.Domain;
 using RetailPOSApi.DTOs.Configuration;
@@ -29,21 +30,44 @@ public sealed class SaleService(AppDbContext db, ICurrentUserService currentUser
     {
         var state = await CurrentCashier(ct);
         if (state.Status != SaleOperationStatus.Success) return new(state.Status, null, state.Message);
-        var shift = await db.CashierShifts.AsNoTracking().SingleOrDefaultAsync(
-            x => x.CashierUserId == state.UserId && x.Status == CashierShiftStatus.Open, ct);
-        if (shift is null) return Conflict("An open cashier shift is required to create a sale.");
-        var now = clock.GetUtcNow();
-        var sale = new Sale
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        try
         {
-            BranchId = shift.BranchId, RegisterId = shift.RegisterId, CashierShiftId = shift.Id,
-            CashierUserId = state.UserId, Status = SaleStatus.Open,
-            Subtotal = 0, DiscountTotal = 0, TaxTotal = 0, TotalAmount = 0,
-            ReceiptNumber = null, CompletedAtUtc = null, VoidedAtUtc = null,
-            VoidedByUserId = null, VoidReason = null, CreatedAtUtc = now, UpdatedAtUtc = now
-        };
-        db.Sales.Add(sale);
-        await db.SaveChangesAsync(ct);
-        return new(SaleOperationStatus.Success, await Detail(db.Sales.AsNoTracking().Where(x => x.Id == sale.Id), ct));
+            // Take the same shift row write lock used by closing before accepting a
+            // new open sale. A close that wins first makes this predicate affect 0.
+            var claimed = await db.CashierShifts
+                .Where(x => x.CashierUserId == state.UserId && x.Status == CashierShiftStatus.Open)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.UpdatedAtUtc, x => x.UpdatedAtUtc), ct);
+            if (claimed != 1)
+            {
+                await transaction.RollbackAsync(ct);
+                return Conflict("An open cashier shift is required to create a sale.");
+            }
+            var shift = await db.CashierShifts.AsNoTracking().SingleAsync(
+                x => x.CashierUserId == state.UserId && x.Status == CashierShiftStatus.Open, ct);
+            var now = clock.GetUtcNow();
+            var sale = new Sale
+            {
+                BranchId = shift.BranchId, RegisterId = shift.RegisterId, CashierShiftId = shift.Id,
+                CashierUserId = state.UserId, Status = SaleStatus.Open,
+                Subtotal = 0, DiscountTotal = 0, TaxTotal = 0, TotalAmount = 0,
+                ReceiptNumber = null, CompletedAtUtc = null, VoidedAtUtc = null,
+                VoidedByUserId = null, VoidReason = null, CreatedAtUtc = now, UpdatedAtUtc = now
+            };
+            db.Sales.Add(sale);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return new(SaleOperationStatus.Success, await Detail(db.Sales.AsNoTracking().Where(x => x.Id == sale.Id), ct));
+        }
+        catch (DbException)
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            if (!await db.CashierShifts.AsNoTracking().AnyAsync(
+                    x => x.CashierUserId == state.UserId && x.Status == CashierShiftStatus.Open, ct))
+                return Conflict("An open cashier shift is required to create a sale.");
+            throw;
+        }
     }
 
     public Task<SaleOperationResult> AddLine(int saleId, AddSaleLineRequest request, CancellationToken ct) =>
