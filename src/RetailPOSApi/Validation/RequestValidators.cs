@@ -6,8 +6,21 @@ using RetailPOSApi.Domain;
 using RetailPOSApi.DTOs.Shifts;
 using RetailPOSApi.DTOs.Sales;
 using RetailPOSApi.Services;
+using RetailPOSApi.DTOs.Reports;
 
 namespace RetailPOSApi.Validation;
+
+public sealed class ReportQueryValidator : AbstractValidator<ReportQuery>
+{
+    public ReportQueryValidator()
+    {
+        RuleFor(x => x.BranchId).GreaterThan(0).When(x => x.BranchId.HasValue);
+        RuleFor(x => x.RegisterId).GreaterThan(0).When(x => x.RegisterId.HasValue);
+        RuleFor(x => x.CashierUserId).GreaterThan(0).When(x => x.CashierUserId.HasValue);
+        RuleFor(x => x).Must(x => !x.FromDate.HasValue || !x.ToDate.HasValue || x.ToDate > x.FromDate)
+            .WithMessage("toDate must be strictly greater than fromDate.");
+    }
+}
 
 public sealed class AddSaleLineRequestValidator : AbstractValidator<AddSaleLineRequest>
 {

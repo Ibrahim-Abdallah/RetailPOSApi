@@ -64,6 +64,7 @@ builder.Services.AddScoped<ICashierShiftService, CashierShiftService>();
 builder.Services.AddScoped<ISaleService, SaleService>();
 builder.Services.AddScoped<ISaleCompletionService, SaleCompletionService>();
 builder.Services.AddScoped<ISaleLifecycleService, SaleLifecycleService>();
+builder.Services.AddScoped<IReportingService, ReportingService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<AdminBootstrapService>();
 builder.Services.AddOptions<JwtOptions>()
