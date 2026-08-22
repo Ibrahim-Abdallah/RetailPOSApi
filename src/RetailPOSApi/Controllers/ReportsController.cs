@@ -10,13 +10,13 @@ namespace RetailPOSApi.Controllers;
 [ApiController]
 [Route("api/management/reports")]
 [Authorize(Roles = $"{nameof(UserRole.Admin)},{nameof(UserRole.Manager)}")]
-[ProducesResponseType(StatusCodes.Status401Unauthorized)]
-[ProducesResponseType(StatusCodes.Status403Forbidden)]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
 public sealed class ReportsController(IReportingService reporting, IValidator<ReportQuery> validator) : ControllerBase
 {
     [HttpGet("sales-summary")]
     [ProducesResponseType<SalesSummaryResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> SalesSummary([FromQuery] ReportQuery query, CancellationToken cancellationToken)
     {
         var validation = await validator.ValidateAsync(query, cancellationToken);
@@ -27,7 +27,7 @@ public sealed class ReportsController(IReportingService reporting, IValidator<Re
 
     [HttpGet("shift-summary")]
     [ProducesResponseType<ShiftSummaryResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ShiftSummary([FromQuery] ReportQuery query, CancellationToken cancellationToken)
     {
         var validation = await validator.ValidateAsync(query, cancellationToken);

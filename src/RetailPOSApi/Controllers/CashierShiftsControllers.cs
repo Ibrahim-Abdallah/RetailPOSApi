@@ -11,17 +11,17 @@ namespace RetailPOSApi.Controllers;
 [ApiController]
 [Route("api/cashier/shifts")]
 [Authorize(Roles = nameof(UserRole.Cashier))]
-[ProducesResponseType(StatusCodes.Status401Unauthorized)]
-[ProducesResponseType(StatusCodes.Status403Forbidden)]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
 public sealed class CashierShiftsController(ICashierShiftService service, IValidator<OpenShiftRequest> openValidator,
     IValidator<CloseShiftRequest> closeValidator,
     IValidator<ShiftQuery> queryValidator) : ControllerBase
 {
     [HttpPost("open")]
     [ProducesResponseType<ShiftResponse>(StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Open(OpenShiftRequest request, CancellationToken ct)
     {
         var validation = await openValidator.ValidateAsync(request, ct);
@@ -38,9 +38,9 @@ public sealed class CashierShiftsController(ICashierShiftService service, IValid
 
     [HttpPost("{id:int}/close")]
     [ProducesResponseType<ShiftResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Close(int id, CloseShiftRequest request, CancellationToken ct)
     {
         var validation = await closeValidator.ValidateAsync(request, ct);

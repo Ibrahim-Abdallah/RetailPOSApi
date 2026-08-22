@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet restore
+      - run: dotnet build --no-restore
+      - run: dotnet test --no-build
+      - name: Scan application packages
+        run: dotnet list src/RetailPOSApi package --vulnerable --include-transitive
+      - name: Scan test packages
+        run: dotnet list tests/RetailPOSApi.Tests package --vulnerable --include-transitive
