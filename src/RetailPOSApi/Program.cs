@@ -21,10 +21,19 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddControllers();
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+        context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+});
+builder.Services.AddExceptionHandler<UnexpectedExceptionHandler>();
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer((document, _, _) =>
     {
+        document.Info.Title = "Retail POS API";
+        document.Info.Version = "v1";
+        document.Info.Description = "A transactional retail POS backend demonstrating authentication, cashier shifts, sales, payments, refunds, cash reconciliation, and focused Dapper reporting.";
         document.Components ??= new OpenApiComponents();
         document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
         document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
@@ -96,9 +105,15 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.MapScalarApiReference(options => options.AddPreferredSecuritySchemes("Bearer"));
+    app.MapScalarApiReference(options =>
+    {
+        options.Title = "Retail POS API Reference";
+        options.AddPreferredSecuritySchemes("Bearer");
+    });
 }
 
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
